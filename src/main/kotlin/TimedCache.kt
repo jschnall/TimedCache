@@ -1,16 +1,17 @@
 import kotlinx.coroutines.*
 import java.time.Clock
 import java.time.ZoneId
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.coroutineContext
 import kotlin.random.Random
 
 class TimedCache<K,V>(
     val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    val context: CoroutineContext
+    dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
+    val coroutineScope = CoroutineScope(dispatcher + SupervisorJob())
+
     data class Entry<V> (
         val value: V,
+        val lifetime: Long,
         val expires: Long,
         val job: Job
     )
@@ -21,35 +22,41 @@ class TimedCache<K,V>(
         if (lifetime > 0) {
             map[key]?.job?.cancel(message = "Replaced")
 
-            val expires = clock.millis() + lifetime
-            val job = CoroutineScope(context).launch {
-                delay(lifetime)
-                map.remove(key)
-                if (DEBUG) {
-                    println("Expired: $key")
+            map[key] = Entry(
+                value = value,
+                lifetime = lifetime,
+                expires = clock.millis() + lifetime,
+                job = coroutineScope.launch {
+                    delay(lifetime)
+                    map.remove(key)
+                    if (DEBUG) {
+                        println("Expired: $key")
+                    }
                 }
-            }
-            map[key] = Entry(value, expires, job)
+            )
+
             return true
         }
         return false
     }
 
     fun get(key: K): V? {
-        return map[key]?.value
+        map[key]?.let {
+            if (it.expires > clock.millis()) return it.value
+        }
+        return null
     }
 
     fun remove(key: K): V? {
-        map[key]?.job?.cancel(message = "Removed")
-        return map.remove(key)?.value
+        map.remove(key)?.let {
+            it.job.cancel(message = "Removed")
+            if (it.expires > clock.millis()) return it.value
+        }
+        return null
     }
 
     fun print() {
-        print("${clock.millis()}: (")
-        for (entry in map.values) {
-            print("${entry.value},")
-        }
-        println(")")
+        println("${clock.millis()}: (${map.entries})")
     }
 
     companion object {
@@ -58,16 +65,19 @@ class TimedCache<K,V>(
 }
 
 fun main() = runBlocking {
-//    test1()
-    test2()
+    //testExpire()
+//    testRemove()
+    testBulk()
 //    testGet()
 }
 
-suspend fun test1() {
-    val cache = TimedCache<Int, String>(context = coroutineContext)
+suspend fun testExpire() {
+    val cache = TimedCache<Int, String>()
+
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
     cache.add(3, "Green", 1_000)
+
     cache.print()
     delay(1_200)
     cache.print()
@@ -77,10 +87,24 @@ suspend fun test1() {
     cache.print()
 }
 
-suspend fun test2() {
-    val cache = TimedCache<Int, String>(context = coroutineContext)
+suspend fun testRemove() {
+    val cache = TimedCache<Int, String>()
+
+    cache.add(1, "Red", 5_000)
+    cache.add(2, "Blue", 5_000)
+    cache.add(3, "Green", 5_000)
+
+    cache.print()
+    cache.remove(2)
+    cache.print()
+    delay(6_000)
+    cache.print()
+}
+
+suspend fun testBulk() {
+    val cache = TimedCache<Int, String>()
     val lifetimes = listOf<Long>(0, 1, 100, 1000, 2000, 5000)
-    for (i in 1 .. 1000) {
+    for (i in 1 .. 5000) {
         cache.add(
             key = i,
             value = Random.nextInt().toString(),
@@ -92,7 +116,7 @@ suspend fun test2() {
 }
 
 suspend fun testGet() {
-    val cache = TimedCache<Int, String>(context = coroutineContext)
+    val cache = TimedCache<Int, String>()
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
 

@@ -2,7 +2,6 @@ import kotlinx.coroutines.*
 import java.time.Clock
 import java.time.ZoneId
 import java.util.WeakHashMap
-import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 import kotlin.random.Random
 
@@ -10,8 +9,10 @@ import kotlin.random.Random
 class TimedBlockCache<K,V>(
     val maxEntryLife: Long,
     val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    val context: CoroutineContext
+    val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
+    val coroutineScope = CoroutineScope(dispatcher + SupervisorJob())
+
     data class Block<V>(
         val expires: Long
     ) {
@@ -56,7 +57,7 @@ class TimedBlockCache<K,V>(
         val lifetime = BLOCK_WIDTH * maxEntryLife
         val block = Block<V>(expires = clock.millis() + lifetime)
 
-        CoroutineScope(context).launch {
+        coroutineScope.launch {
             delay(lifetime)
             blocks.remove(block)
             if (DEBUG) {
@@ -80,16 +81,16 @@ class TimedBlockCache<K,V>(
     }
 
     fun remove(key: K): V? {
-        return map.remove(key)?.value
+        map.remove(key)?.let {
+            if (it.expires > clock.millis()) return it.value
+        }
+        return null
     }
 
     fun print() {
-        print("${clock.millis()}: (")
-        for (entry in map.values) {
-            print("${entry.value},")
-        }
-        println(")")
+        println("${clock.millis()}: (${map.entries})")
     }
+
 
     companion object {
         const val DEBUG = true
@@ -104,7 +105,7 @@ fun main() = runBlocking {
 }
 
 suspend fun blockTest() {
-    val cache = TimedBlockCache<Int, String>(maxEntryLife = 5_000, context = coroutineContext)
+    val cache = TimedBlockCache<Int, String>(5_000)
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
     cache.add(3, "Green", 1_000)
@@ -116,7 +117,7 @@ suspend fun blockTest() {
 }
 
 suspend fun blockTest2() {
-    val cache = TimedBlockCache<Int, String>(maxEntryLife = 5_000, context = coroutineContext)
+    val cache = TimedBlockCache<Int, String>(5_000)
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
     cache.add(3, "Green", 1_000)
@@ -128,7 +129,7 @@ suspend fun blockTest2() {
 }
 
 suspend fun blockTest3() {
-    val cache = TimedBlockCache<Int, String>(maxEntryLife = 5_000, context = coroutineContext)
+    val cache = TimedBlockCache<Int, String>(5_000)
     val lifetimes = listOf<Long>(0, 1, 100, 1000, 2000, 5000)
     for (i in 1 .. 1000) {
         cache.add(
