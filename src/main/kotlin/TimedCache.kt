@@ -4,10 +4,13 @@ import java.time.ZoneId
 import kotlin.random.Random
 
 class TimedCache<K,V>(
-    val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    dispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val clock: Clock = Clock.system(ZoneId.systemDefault()),
+    private val coroutineScope: CoroutineScope
 ) {
-    val coroutineScope = CoroutineScope(dispatcher + SupervisorJob())
+    constructor(
+        clock: Clock = Clock.system(ZoneId.systemDefault()),
+        dispatcher: CoroutineDispatcher = Dispatchers.IO
+    ): this(clock, CoroutineScope( SupervisorJob() + dispatcher))
 
     data class Entry<V> (
         val value: V,
@@ -89,6 +92,7 @@ suspend fun testExpire() {
 
 suspend fun testRemove() {
     val cache = TimedCache<Int, String>()
+//    val cache = TimedCache<Int, String>(coroutineScope = CoroutineScope(coroutineContext))
 
     cache.add(1, "Red", 5_000)
     cache.add(2, "Blue", 5_000)
@@ -103,6 +107,8 @@ suspend fun testRemove() {
 
 suspend fun testBulk() {
     val cache = TimedCache<Int, String>()
+//    val cache = TimedCache<Int, String>(coroutineScope = CoroutineScope(coroutineContext))
+
     val lifetimes = listOf<Long>(0, 1, 100, 1000, 2000, 5000)
     for (i in 1 .. 5000) {
         cache.add(

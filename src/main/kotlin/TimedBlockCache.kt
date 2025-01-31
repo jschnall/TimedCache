@@ -2,16 +2,18 @@ import kotlinx.coroutines.*
 import java.time.Clock
 import java.time.ZoneId
 import java.util.WeakHashMap
-import kotlin.coroutines.coroutineContext
 import kotlin.random.Random
 
-
 class TimedBlockCache<K,V>(
-    val maxEntryLife: Long,
-    val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    val dispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val maxEntryLife: Long,
+    private val clock: Clock = Clock.system(ZoneId.systemDefault()),
+    private val coroutineScope: CoroutineScope
 ) {
-    val coroutineScope = CoroutineScope(dispatcher + SupervisorJob())
+    constructor(
+        maxEntryLife: Long,
+        clock: Clock = Clock.system(ZoneId.systemDefault()),
+        dispatcher: CoroutineDispatcher = Dispatchers.IO
+    ): this(maxEntryLife, clock, CoroutineScope( SupervisorJob() + dispatcher))
 
     data class Block<V>(
         val expires: Long
