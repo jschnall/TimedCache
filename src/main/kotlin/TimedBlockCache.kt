@@ -7,13 +7,14 @@ import kotlin.random.Random
 class TimedBlockCache<K,V>(
     private val maxEntryLife: Long,
     private val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val cancelScopeOnDestroy: Boolean = false
 ) {
     constructor(
         maxEntryLife: Long,
         clock: Clock = Clock.system(ZoneId.systemDefault()),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
-    ): this(maxEntryLife, clock, CoroutineScope( SupervisorJob() + dispatcher))
+    ): this(maxEntryLife, clock, CoroutineScope( SupervisorJob() + dispatcher), true)
 
     data class Block<V>(
         val expires: Long
@@ -89,6 +90,12 @@ class TimedBlockCache<K,V>(
         return null
     }
 
+    fun destroy() {
+        if (cancelScopeOnDestroy) {
+            coroutineScope.cancel()
+        }
+    }
+
     fun print() {
         println("${clock.millis()}: (${map.entries})")
     }
@@ -108,6 +115,7 @@ fun main() = runBlocking {
 
 suspend fun blockTest() {
     val cache = TimedBlockCache<Int, String>(5_000)
+
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
     cache.add(3, "Green", 1_000)
@@ -116,10 +124,13 @@ suspend fun blockTest() {
     cache.print()
     delay(10_000)
     cache.print()
+
+    cache.destroy()
 }
 
 suspend fun blockTest2() {
     val cache = TimedBlockCache<Int, String>(5_000)
+
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
     cache.add(3, "Green", 1_000)
@@ -128,10 +139,13 @@ suspend fun blockTest2() {
     println("${cache.get(1)}, ${cache.get(2)}")
     delay(10_000)
     println("${cache.get(1)}, ${cache.get(2)}")
+
+    cache.destroy()
 }
 
 suspend fun blockTest3() {
     val cache = TimedBlockCache<Int, String>(5_000)
+
     val lifetimes = listOf<Long>(0, 1, 100, 1000, 2000, 5000)
     for (i in 1 .. 1000) {
         cache.add(
@@ -154,4 +168,6 @@ suspend fun blockTest3() {
     System.gc()
     delay(1000)
     cache.print()
+
+    cache.destroy()
 }

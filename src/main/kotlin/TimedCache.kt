@@ -1,16 +1,18 @@
 import kotlinx.coroutines.*
 import java.time.Clock
 import java.time.ZoneId
+import kotlin.coroutines.coroutineContext
 import kotlin.random.Random
 
 class TimedCache<K,V>(
     private val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val cancelScopeOnDestroy: Boolean = false
 ) {
     constructor(
         clock: Clock = Clock.system(ZoneId.systemDefault()),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
-    ): this(clock, CoroutineScope( SupervisorJob() + dispatcher))
+    ): this(clock, CoroutineScope( SupervisorJob() + dispatcher), true)
 
     data class Entry<V> (
         val value: V,
@@ -58,6 +60,12 @@ class TimedCache<K,V>(
         return null
     }
 
+    fun destroy() {
+        if (cancelScopeOnDestroy) {
+            coroutineScope.cancel()
+        }
+    }
+
     fun print() {
         println("${clock.millis()}: (${map.entries})")
     }
@@ -88,6 +96,8 @@ suspend fun testExpire() {
     cache.print()
     delay(1_200)
     cache.print()
+
+    cache.destroy()
 }
 
 suspend fun testRemove() {
@@ -103,6 +113,8 @@ suspend fun testRemove() {
     cache.print()
     delay(6_000)
     cache.print()
+
+    cache.destroy()
 }
 
 suspend fun testBulk() {
@@ -119,6 +131,8 @@ suspend fun testBulk() {
     }
     delay(6000)
     cache.print()
+
+    cache.destroy()
 }
 
 suspend fun testGet() {
@@ -132,4 +146,6 @@ suspend fun testGet() {
     println("${cache.get(1)}, ${cache.get(2)}")
     delay(1_200)
     println("${cache.get(1)}, ${cache.get(2)}")
+
+    cache.destroy()
 }
