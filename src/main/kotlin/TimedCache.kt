@@ -1,7 +1,7 @@
 import kotlinx.coroutines.*
 import java.time.Clock
 import java.time.ZoneId
-import kotlin.coroutines.coroutineContext
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 class TimedCache<K,V>(
@@ -21,7 +21,7 @@ class TimedCache<K,V>(
         val job: Job
     )
 
-    private val map = mutableMapOf<K, Entry<V>>()
+    private val map = ConcurrentHashMap<K, Entry<V>>()
 
     fun add(key: K, value: V, lifetime: Long): Boolean {
         if (lifetime > 0) {
@@ -67,16 +67,19 @@ class TimedCache<K,V>(
     }
 
     fun print() {
-        println("${clock.millis()}: (${map.entries})")
+        println("${clock.millis()}: $map")
     }
 
+    val size: Int
+        get() = map.size
+
     companion object {
-        const val DEBUG = true
+        const val DEBUG = false
     }
 }
 
 fun main() = runBlocking {
-    //testExpire()
+//    testExpire()
 //    testRemove()
     testBulk()
 //    testGet()
@@ -101,15 +104,15 @@ suspend fun testExpire() {
 }
 
 suspend fun testRemove() {
-    val cache = TimedCache<Int, String>()
+    val cache = TimedCache<String, String>()
 //    val cache = TimedCache<Int, String>(coroutineScope = CoroutineScope(coroutineContext))
 
-    cache.add(1, "Red", 5_000)
-    cache.add(2, "Blue", 5_000)
-    cache.add(3, "Green", 5_000)
+    cache.add("foo", "Red", 5_000)
+    cache.add("bar", "Blue", 5_000)
+    cache.add("blah", "Green", 5_000)
 
     cache.print()
-    cache.remove(2)
+    cache.remove("bar")
     cache.print()
     delay(6_000)
     cache.print()
@@ -118,19 +121,30 @@ suspend fun testRemove() {
 }
 
 suspend fun testBulk() {
-    val cache = TimedCache<Int, String>()
+    val cache = TimedCache<Int, Int>()
 //    val cache = TimedCache<Int, String>(coroutineScope = CoroutineScope(coroutineContext))
 
     val lifetimes = listOf<Long>(0, 1, 100, 1000, 2000, 5000)
     for (i in 1 .. 5000) {
         cache.add(
             key = i,
-            value = Random.nextInt().toString(),
+            value = Random.nextInt(),
             lifetime = lifetimes[Random.nextInt(lifetimes.size)]
         )
     }
+    for (i in 4000 .. 5000) {
+        cache.remove(key = i)
+    }
+    for (i in 1 .. 1000) {
+        cache.add(
+            key = i,
+            value = Random.nextInt(),
+            lifetime = lifetimes[Random.nextInt(lifetimes.size)]
+        )
+    }
+    println(cache.size)
     delay(6000)
-    cache.print()
+    println(cache.size)
 
     cache.destroy()
 }

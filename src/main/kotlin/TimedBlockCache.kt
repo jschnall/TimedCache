@@ -2,6 +2,7 @@ import kotlinx.coroutines.*
 import java.time.Clock
 import java.time.ZoneId
 import java.util.WeakHashMap
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 class TimedBlockCache<K,V>(
@@ -32,7 +33,7 @@ class TimedBlockCache<K,V>(
     )
 
     private val map = WeakHashMap<K, Entry<V>>()
-    private val blocks = mutableSetOf<Block<V>>()
+    private val blocks = ConcurrentHashMap.newKeySet<Block<V>>()
     var lastBlock: Block<V>? = null
 
     fun add(key: K, value: V, lifetime: Long): Boolean {
@@ -97,7 +98,7 @@ class TimedBlockCache<K,V>(
     }
 
     fun print() {
-        println("${clock.millis()}: (${map.entries})")
+        println("${clock.millis()}: $map")
     }
 
 
