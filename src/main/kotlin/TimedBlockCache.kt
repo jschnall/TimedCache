@@ -8,14 +8,15 @@ import kotlin.random.Random
 class TimedBlockCache<K,V>(
     private val maxEntryLife: Long,
     private val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    private val coroutineScope: CoroutineScope,
-    private val cancelScopeOnDestroy: Boolean = false
+    private val coroutineScope: CoroutineScope
 ) {
     constructor(
         maxEntryLife: Long,
         clock: Clock = Clock.system(ZoneId.systemDefault()),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
-    ): this(maxEntryLife, clock, CoroutineScope( SupervisorJob() + dispatcher), true)
+    ): this(maxEntryLife, clock, CoroutineScope( SupervisorJob() + dispatcher)) {
+        cancelScopeOnDestroy = true
+    }
 
     data class Block<V>(
         val expires: Long
@@ -34,7 +35,8 @@ class TimedBlockCache<K,V>(
 
     private val map = WeakHashMap<K, Entry<V>>()
     private val blocks = ConcurrentHashMap.newKeySet<Block<V>>()
-    var lastBlock: Block<V>? = null
+    private var lastBlock: Block<V>? = null
+    private var cancelScopeOnDestroy = false
 
     fun add(key: K, value: V, lifetime: Long): Boolean {
         if (lifetime in 1..< maxEntryLife) {

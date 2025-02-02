@@ -6,13 +6,14 @@ import kotlin.random.Random
 
 class TimedCache<K,V>(
     private val clock: Clock = Clock.system(ZoneId.systemDefault()),
-    private val coroutineScope: CoroutineScope,
-    private val cancelScopeOnDestroy: Boolean = false
+    private val coroutineScope: CoroutineScope
 ) {
     constructor(
         clock: Clock = Clock.system(ZoneId.systemDefault()),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
-    ): this(clock, CoroutineScope( SupervisorJob() + dispatcher), true)
+    ): this(clock, CoroutineScope( SupervisorJob() + dispatcher)) {
+        cancelScopeOnDestroy = true
+    }
 
     data class Entry<V> (
         val value: V,
@@ -22,6 +23,7 @@ class TimedCache<K,V>(
     )
 
     private val map = ConcurrentHashMap<K, Entry<V>>()
+    private var cancelScopeOnDestroy = false
 
     fun add(key: K, value: V, lifetime: Long): Boolean {
         if (lifetime > 0) {
@@ -79,9 +81,9 @@ class TimedCache<K,V>(
 }
 
 fun main() = runBlocking {
-//    testExpire()
+    testExpire()
 //    testRemove()
-    testBulk()
+//    testBulk()
 //    testGet()
 }
 
