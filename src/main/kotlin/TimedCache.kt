@@ -89,6 +89,7 @@ fun main() = runBlocking {
 
 suspend fun testExpire() {
     val cache = TimedCache<Int, String>()
+//    val cache = TimedCache<Int, String>(coroutineScope = CoroutineScope(currentCoroutineContext()))
 
     cache.add(1, "Red", 3_000)
     cache.add(2, "Blue", 2_000)
